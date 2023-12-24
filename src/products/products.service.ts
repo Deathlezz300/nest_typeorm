@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, InternalServerErrorException, Logger, 
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { isUUID } from 'class-validator';
 import { PaginationDTO } from 'src/common/dto/pagination.dto';
@@ -17,7 +17,8 @@ export class ProductsService {
     @InjectRepository(Product)
     private readonly productRepository:Repository<Product>,
     @InjectRepository(ProductImage)
-    private readonly productImageRepository:Repository<ProductImage>
+    private readonly productImageRepository:Repository<ProductImage>,
+    private readonly dataSource:DataSource
   ){}
 
   async create(createProductDto: CreateProductDto) {
@@ -113,8 +114,8 @@ export class ProductsService {
   }
 
   async update(id: string, updateProductDto: UpdateProductDto) {
-    
-    try{
+
+      const {images,...toUpdate}=updateProductDto;
 
       const productoFind=updateProductDto.title ? await this.findOne(updateProductDto.title) : null;
 
@@ -124,20 +125,43 @@ export class ProductsService {
 
       const productToUpdate=await this.productRepository.preload({
         id:id,
-        ...updateProductDto,
-        images:[]
+        ...toUpdate
       })
 
       if(!productToUpdate){
         throw new BadRequestException(`Product with ${id} doesn't exists`)
       }
 
-      const productUpdated=await this.productRepository.save(productToUpdate);
+      const queryRunner=this.dataSource.createQueryRunner();
 
-      return productUpdated;
+      await queryRunner.connect();
+
+      await queryRunner.startTransaction();
+
+
+    try{
+
+      if(images){
+        await queryRunner.manager.delete(ProductImage,{product:{id}})
+
+        productToUpdate.images=images.map(img=>(
+          this.productImageRepository.create({url:img})
+        ));
+      }
+
+      await queryRunner.manager.save(productToUpdate)
+  
+      //const productUpdated=await this.productRepository.save(productToUpdate);
+
+      await queryRunner.commitTransaction();
+
+      return this.findOnePlain(id);
 
     }catch(error){
-       return this.handleExceptions(error)
+       await queryRunner.rollbackTransaction();
+       return this.handleExceptions(error);
+    }finally{
+      await queryRunner.release();
     }
 
   }
@@ -151,6 +175,23 @@ export class ProductsService {
       return{
         ok:true
       }
+
+  }
+
+  async deleteAllProducts(){
+
+    const query=this.productRepository.createQueryBuilder('product');
+
+    try{
+
+      return await query
+        .delete()
+        .where({})
+        .execute()
+
+    }catch(error){
+      this.handleExceptions(error)
+    }
 
   }
 
