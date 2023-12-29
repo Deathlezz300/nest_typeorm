@@ -8,6 +8,7 @@ import { isUUID } from 'class-validator';
 import { PaginationDTO } from 'src/common/dto/pagination.dto';
 import { ProductImage } from './entities/productImage.entity';
 import { ConfigService } from '@nestjs/config';
+import { User } from 'src/auth/entities/user.entity';
 
 @Injectable()
 export class ProductsService {
@@ -23,7 +24,7 @@ export class ProductsService {
     private readonly configService:ConfigService
   ){}
 
-  async create(createProductDto: CreateProductDto) {
+  async create(createProductDto: CreateProductDto,user:User) {
     
     try{
 
@@ -37,7 +38,8 @@ export class ProductsService {
 
       const producto=this.productRepository.create({
         ...productDetails,
-        images:images.map(image=>this.productImageRepository.create({url:image}))
+        images:images.map(image=>this.productImageRepository.create({url:image})),
+        user:user
       })
 
       await this.productRepository.save(producto);
@@ -63,7 +65,8 @@ export class ProductsService {
           take:limit,
           skip:offset,
           relations:{
-            images:true
+            images:true,
+            user:true
           }
       });
 
@@ -71,7 +74,8 @@ export class ProductsService {
 
       return (await productos).map(product=>({
         ...product,
-        images:product.images.map(img=>`${this.configService.get('HOST_API')}/files/product/${img.url}`)
+        images:product.images.map(img=>`${this.configService.get('HOST_API')}/files/product/${img.url}`),
+        user:product.user.id
       }));
 
     }catch(error){

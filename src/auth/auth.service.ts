@@ -83,6 +83,23 @@ export class AuthService {
 
   }
 
+  async CheckToken(user:User){
+
+    const UserFind=await this.userRepository.findOneBy({id:user.id});
+
+    if(!UserFind){
+      throw new BadRequestException('User doesn´t exists');
+    }
+
+    const token=this.getJwToken({id:user.id});
+
+    return{
+      ...user,
+      token
+    }
+
+
+  }
 
   private handleDBErros(errors:any):never{
     if(errors.code==='23505'){
