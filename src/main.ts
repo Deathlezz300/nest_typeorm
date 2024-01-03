@@ -18,6 +18,8 @@ async function bootstrap() {
     }
   }))
 
+  app.enableCors();
+
   const config=new DocumentBuilder()
     .setTitle('Teslo nest')
     .setDescription('Teslo shop API')
